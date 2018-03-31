@@ -26,15 +26,14 @@ import io
 import sys
 import xml.dom.minidom
 
+import reportlab
 from reportlab import platypus
 from reportlab.graphics.barcode import code39
-import reportlab
 from reportlab.pdfgen import canvas
+from six import text_type
 
 from . import color
 from . import utils
-
-from six import text_type
 
 #
 # Change this to UTF-8 if you plan tu use Reportlab's UTF-8 support
@@ -81,7 +80,8 @@ class _rml_styles(object):
         for attr in ['fontName', 'bulletFontName', 'bulletText']:
             if node.hasAttribute(attr):
                 style.__dict__[attr] = node.getAttribute(attr)
-        for attr in ['fontSize', 'leftIndent', 'rightIndent', 'spaceBefore', 'spaceAfter', 'firstLineIndent', 'bulletIndent', 'bulletFontSize', 'leading']:
+        for attr in ['fontSize', 'leftIndent', 'rightIndent', 'spaceBefore', 'spaceAfter', 'firstLineIndent',
+                     'bulletIndent', 'bulletFontSize', 'leading']:
             if node.hasAttribute(attr):
                 if attr == 'fontSize' and not node.hasAttribute('leading'):
                     style.__dict__['leading'] = utils.unit_get(
@@ -222,8 +222,8 @@ class _rml_doc(object):
 
         for node in els:
             for font in node.getElementsByTagName('registerFont'):
-                name = font.getAttribute('fontName').encode('ascii')
-                fname = font.getAttribute('fontFile').encode('ascii')
+                name = font.getAttribute('fontName')
+                fname = font.getAttribute('fontFile')
                 pdfmetrics.registerFont(TTFont(name, fname))
                 addMapping(name, 0, 0, name)  # normal
                 addMapping(name, 0, 1, name)  # italic
@@ -333,7 +333,8 @@ class _rml_canvas(object):
 
     def _circle(self, node):
         self.canvas.circle(x_cen=utils.unit_get(node.getAttribute('x')), y_cen=utils.unit_get(node.getAttribute(
-            'y')), r=utils.unit_get(node.getAttribute('radius')), **utils.attr_get(node, [], {'fill': 'bool', 'stroke': 'bool'}))
+            'y')), r=utils.unit_get(node.getAttribute('radius')),
+                           **utils.attr_get(node, [], {'fill': 'bool', 'stroke': 'bool'}))
 
     def _place(self, node):
         flows = _rml_flowable(self.doc).render(node)
@@ -372,7 +373,7 @@ class _rml_canvas(object):
         from six.moves import urllib
 
         from reportlab.lib.utils import ImageReader
-        u = urllib.request.urlopen("file:" + str(node.getAttribute('file')))
+        u = urllib.request.urlopen(str(node.getAttribute('file')))
         s = io.BytesIO()
         s.write(u.read())
         s.seek(0)
@@ -465,7 +466,8 @@ class _rml_canvas(object):
             'curves': self._curves,
             'fill': lambda node: self.canvas.setFillColor(color.get(node.getAttribute('color'))),
             'stroke': lambda node: self.canvas.setStrokeColor(color.get(node.getAttribute('color'))),
-            'setFont': lambda node: self.canvas.setFont(node.getAttribute('name'), utils.unit_get(node.getAttribute('size'))),
+            'setFont': lambda node: self.canvas.setFont(node.getAttribute('name'),
+                                                        utils.unit_get(node.getAttribute('size'))),
             'place': self._place,
             'circle': self._circle,
             'lineMode': self._line_mode,
@@ -602,6 +604,7 @@ class _rml_flowable(object):
                 canvas = self.canv
                 drw = _rml_draw(self.node, self.styles)
                 drw.render(self.canv, None)
+
         return Illustration(node, self.styles)
 
     def _flowable(self, node):
@@ -614,10 +617,12 @@ class _rml_flowable(object):
             return None
         elif node.localName == 'xpre':
             style = self.styles.para_style_get(node)
-            return platypus.XPreformatted(self._textual(node), style, **(utils.attr_get(node, [], {'bulletText': 'str', 'dedent': 'int', 'frags': 'int'})))
+            return platypus.XPreformatted(self._textual(node), style, **(
+                utils.attr_get(node, [], {'bulletText': 'str', 'dedent': 'int', 'frags': 'int'})))
         elif node.localName == 'pre':
             style = self.styles.para_style_get(node)
-            return platypus.Preformatted(self._textual(node), style, **(utils.attr_get(node, [], {'bulletText': 'str', 'dedent': 'int'})))
+            return platypus.Preformatted(self._textual(node), style,
+                                         **(utils.attr_get(node, [], {'bulletText': 'str', 'dedent': 'int'})))
         elif node.localName == 'illustration':
             return self._illustration(node)
         elif node.localName == 'blockTable':
@@ -639,7 +644,8 @@ class _rml_flowable(object):
             style = styles['Heading3']
             return platypus.Paragraph(self._textual(node), style, **(utils.attr_get(node, [], {'bulletText': 'str'})))
         elif node.localName == 'image':
-            return platypus.Image(node.getAttribute('file'), mask=(250, 255, 250, 255, 250, 255), **(utils.attr_get(node, ['width', 'height', 'preserveAspectRatio', 'anchor'])))
+            return platypus.Image(node.getAttribute('file'), mask=(250, 255, 250, 255, 250, 255),
+                                  **(utils.attr_get(node, ['width', 'height', 'preserveAspectRatio', 'anchor'])))
         elif node.localName == 'spacer':
             if node.hasAttribute('width'):
                 width = utils.unit_get(node.getAttribute('width'))
@@ -673,8 +679,8 @@ class _rml_flowable(object):
             if name:
                 kwargs["name"] = name
             kwargs.update(
-                utils.attr_get(node, ['maxWidth','maxHeight', 'mergeSpace'],
-                               {'maxWidth': 'int','maxHeight': 'int'}))
+                utils.attr_get(node, ['maxWidth', 'maxHeight', 'mergeSpace'],
+                               {'maxWidth': 'int', 'maxHeight': 'int'}))
             return platypus.KeepInFrame(**kwargs)
         else:
             sys.stderr.write(
@@ -703,8 +709,15 @@ class _rml_template(object):
                 '(', '').split(',')]
             pageSize = (utils.unit_get(ps[0]), utils.unit_get(ps[1]))
         cm = reportlab.lib.units.cm
-        self.doc_tmpl = platypus.BaseDocTemplate(out, pagesize=pageSize, **utils.attr_get(node, ['leftMargin', 'rightMargin', 'topMargin', 'bottomMargin'], {
-                                                 'allowSplitting': 'int', 'showBoundary': 'bool', 'title': 'str', 'author': 'str', 'rotation': 'int'}))
+        self.doc_tmpl = platypus.BaseDocTemplate(out, pagesize=pageSize, **utils.attr_get(node,
+                                                                                          ['leftMargin', 'rightMargin',
+                                                                                           'topMargin', 'bottomMargin'],
+                                                                                          {
+                                                                                              'allowSplitting': 'int',
+                                                                                              'showBoundary': 'bool',
+                                                                                              'title': 'str',
+                                                                                              'author': 'str',
+                                                                                              'rotation': 'int'}))
         self.page_templates = []
         self.styles = doc.styles
         self.doc = doc
@@ -713,7 +726,9 @@ class _rml_template(object):
             frames = []
             for frame_el in pt.getElementsByTagName('frame'):
                 frame = platypus.Frame(
-                    **(utils.attr_get(frame_el, ['x1', 'y1', 'width', 'height', 'leftPadding', 'rightPadding', 'bottomPadding', 'topPadding'], {'id': 'text', 'showBoundary': 'bool'})))
+                    **(utils.attr_get(frame_el,
+                                      ['x1', 'y1', 'width', 'height', 'leftPadding', 'rightPadding', 'bottomPadding',
+                                       'topPadding'], {'id': 'text', 'showBoundary': 'bool'})))
                 frames.append(frame)
             gr = pt.getElementsByTagName('pageGraphics')
             if len(gr):
@@ -758,6 +773,7 @@ def main():
     else:
         print('Usage: trml2pdf input.rml >output.pdf')
         print('Try \'trml2pdf --help\' for more information.')
+
 
 if __name__ == "__main__":
     main()
